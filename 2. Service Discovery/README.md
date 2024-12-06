@@ -58,4 +58,38 @@ public class DiscoveryserviceApplication {
 
 <br>
 
+### 3. User Service - 프로젝트 생성
+___
 
+- user-service 프로젝트 생성(유레카 서버에서 등록 할 수 있는 마이크로 서비스, 유레카 클라이언트 역할)  
+- dependency : Eureka Discovery Client, Spring Web, Lombok, Spring Boot DevTools 추가
+- 스프링 부트 2.4.2 버전 , spring cloud 버전 2020.0.0 사용
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class UserServiceApplication {
+}
+```
+- @EnableDiscoveryClient 추가 해준다.  
+
+```yaml
+server:
+  port: 9001
+
+spring:
+  application:
+    name: user-service
+
+eureka:
+  client:
+    register-with-eureka: true # 유레카 서버에 정보 등록
+    fetch-registry: true
+    service-url:    #서버의 위치가 어디인지
+      defaultZone: http://127.0.0.1:8761/eureka
+```
+- fetch-registry: true : eureka 서버로부터 인스턴스들의 정보를 주기적으로 가져올 것인지 설정 하는 속성
+- eureka 서버가 켜져있어야 기동 된다. eureka 서버에 들어가면 아래와 같이 user-service 등록 확인 가능
+  <img src="https://github.com/user-attachments/assets/fd6ba4ca-0708-4a4b-ac40-8d3a3c93d27f" width="700" height="50">
+
+<br>
