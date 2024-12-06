@@ -93,3 +93,26 @@ eureka:
   <img src="https://github.com/user-attachments/assets/fd6ba4ca-0708-4a4b-ac40-8d3a3c93d27f" width="700" height="50">
 
 <br>
+
+### 5. User Service - 등록
+___
+- user service 를 여러개 키는법(4개의 인스턴스 작동)
+
+1. 인텔리제이에서 스프링 부트 실행 
+  - 우측상단 서버기동하는 부분에 edit configurations 클릭  
+  <img src="https://github.com/user-attachments/assets/a0ac3423-0a1b-456b-b467-bb4abd53036d" width="700" height="400">  
+
+  - 왼쪽에 복사해서 추가해준다. Modify options Vm option 추가 후 -Dserver.port=9002 추가
+  
+2. mvn 이용 하여 스프링 부트 실행 
+  - 인텔리제이 terminal에서   
+  - mvn spring-boot:run "-Dspring-boot.run.jvmArguments='-Dserver.port=9003'"  
+  - 명령어 실행(안되면 powershell 말고 윈도우 cmd 에서 ..)
+
+3. jar 파일 이용하여 파일 직접 실행  
+  - powershell 에서 mvn clean -> mvn compile package 
+  - target에 user-service 스냅샷이 만들어진다.
+  - java -jar '-Dserver.port=9004' .\target\user-service-0.0.1-SNAPSHOT.jar 
+
+<img src="https://github.com/user-attachments/assets/e13f5ac9-4eb5-47d9-a8b0-f8b9ec8779b6" width="700" height="50">
+
