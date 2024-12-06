@@ -94,7 +94,7 @@ eureka:
 
 <br>
 
-### 5. User Service - 등록
+### 4. User Service - 등록
 ___
 - user service 를 여러개 키는법(4개의 인스턴스 작동)
 
@@ -116,3 +116,25 @@ ___
 
 <img src="https://github.com/user-attachments/assets/e13f5ac9-4eb5-47d9-a8b0-f8b9ec8779b6" width="700" height="50">
 
+<br>
+
+### 5. User Service - Load Balancer
+___
+
+- 포트번호 0 으로 변경 하면 랜덤으로 포트번호가 지정된다. 충돌이 나지 않고 인스턴스를 실행할 수 있다.
+- cmd 에서 mvn spring-boot:run 실행시키면 추가로 인스턴스 실행 가능
+
+이런 방식으로 인스턴스를 2개 실행 시키면 eureka 서버에 UP (1) - LAPTOP-V7A4M61F:user-service:0와 같이
+Availability Zones이 1개 밖에 없다. 아래에 application.yml 파일에 추가 해준다.
+```yaml
+eureka:
+  instance:
+    instance-id: ${spring.cloud.client.hostname}:${spring.application.instance_id:${random.value}}
+```
+그리고 2개의 인스턴스를 실행 시키면 Eureka 에서 UP (2) - LAPTOP-V7A4M61F:4c2ac2bf5cb54e889f503b3be8baac60 , LAPTOP-V7A4M61F:38d2577b374480555e2b9589a3a4180b
+와 같이 2개를 확인 할 수 있다.
+
+위와같이 스케일링 작업을 하기 위해서 유저 서비스를 실행할 때마다 자동으로 포트가 부여가 되고 
+사용자들한테 인식할 수 없는 상태에서 여러개의 인스턴스가 만들어진다.   
+각각의 서비스들은 Discovery 서비스에 잘등록이 되고 라우팅 서비스와 게이트 웨이에 의해서 필요한 작업을 호출할 수 있는 상태  
+이렇게 부하분산 , 로드밸런싱 작업을 할 수 있다.
