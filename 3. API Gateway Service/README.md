@@ -47,3 +47,65 @@ ___
 - spring boot 2.3.8
 - dependency : lombok, Spring Web, Zuul
 
+
+- API Gateway 의 장점 비즈니스 서비스 로직에 사전 처리 , 사후처리 사용가능(인증, 로깅) 필터로 구현가능
+
+- First, Second Service 프로젝트 생성
+```yaml
+server:
+  port: 8081
+spring:
+  application:
+    name: my-first-service
+
+eureka:
+  client:
+    fetch-registry: false
+    register-with-eureka: false
+# second 서비스는 port 8082 , name : my-second-service
+```
+
+```java
+@RestController
+@RequestMapping("/")
+public class FirstServiceController {
+    @GetMapping("/welcome")
+    public String welcome() {
+        return "welcome to the First service";
+    }
+}
+// second 서비스는 return Second , class 명 SecondServiceController 
+```
+http://127.0.0.1:8081/welcome 접속 시 welcome to the First service 출력
+
+
+- Zuul Service 프로젝트 생성
+```java
+@SpringBootApplication
+@EnableZuulProxy
+public class ZuulServiceApplication {
+}
+```
+
+```yaml
+server:
+  port: 8000
+spring:
+  application:
+    name: my-zuul-service
+zuul:
+  routes:
+    first-service:
+      path: /first-service/**
+      url: http://localhost:8081
+    second-service:
+      path: /second-service/**
+      url: http://localhost:8082
+```
+http://127.0.0.1:8000/first-service/welcome => 접속 시 welcome to the First service 출력  
+http://127.0.0.1:8000/second-service/welcome => 접속 시 welcome to the Second service 출력
+
+* 8000번이라는 API Gateway 역할을 해주는 zuul을 이용해 first, second service 사용자의 요청에 따라 어떤 마이크
+로서비스를 이용할지 정할 수 있다. zuul 이 해주는 가장 기본적인 gateway 라우팅
+
+<br>
