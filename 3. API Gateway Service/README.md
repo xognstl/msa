@@ -109,3 +109,174 @@ http://127.0.0.1:8000/second-service/welcome => 접속 시 welcome to the Second
 로서비스를 이용할지 정할 수 있다. zuul 이 해주는 가장 기본적인 gateway 라우팅
 
 <br>
+
+### 3. Netflix Zuul - Filter 적용 (Deprecated)
+___
+
+```java
+package com.example.zuulservice.filter;
+
+import com.netflix.zuul.ZuulFilter;
+import com.netflix.zuul.context.RequestContext;
+import com.netflix.zuul.exception.ZuulException;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import javax.servlet.http.HttpServletRequest;
+
+
+@Slf4j
+@Component
+public class ZuulLoggingFilter extends ZuulFilter {
+
+//    Logger logger = LoggerFactory.getLogger(ZuulLoggingFilter.class);
+    // lombok @Slf4j
+    @Override
+    public Object run() throws ZuulException {  //실제동작
+        log.info("************************ printing logs : ");
+        RequestContext ctx = RequestContext.getCurrentContext();
+        HttpServletRequest request = ctx.getRequest(); //servlet 에서 사용자 요청 정보 처리
+        log.info("************************ " + request.getRequestURI());
+
+        return null;
+    }
+    @Override
+    public String filterType() {
+        return "pre";   // 사전 필터 (사후는 post)
+    }
+    @Override
+    public int filterOrder() {
+        return 1;   // 순서
+    }
+    @Override
+    public boolean shouldFilter() {
+        return true;    //사용 여부
+    }
+}
+```
+http://127.0.0.1:8000/second-service/welcome => zuul-service에서 로그 확인 가능
+
+<br>
+
+### 4. Spring Cloud Gateway 란?
+___
+
+- Spring cloud Gateway(gateway-service) 
+- dependencies : DevTools, Eureka Discovery Client, Gateway
+- 비동기 처리가 가능하다 (zuul 은 안됨.)
+
+<br>
+
+### 5. Spring Cloud Gateway - 프로젝트 생성
+___
+
+```yaml
+server:
+  port: 8080
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+spring:
+  application:
+    name: apigateway-service
+  cloud:
+    gateway:
+      routes: 
+        - id: first-service
+          uri: http://localhost:8081/
+          predicates:
+            - Path=/first-service/**
+        - id: second-service
+          uri: http://localhost:8082/
+          predicates:
+            - Path=/second-service/**
+```
+- 기동하면 Netty 로 기동된다. 비동기 ( tomcat x)
+```java
+@RestController
+@RequestMapping("/first-service")
+public class FirstServiceController {
+} // second 도 같이 requestmapping 변경
+```
+http://localhost:8080/second-service/welcome => 정상적으로 second 서비스 불러온다.
+
+<br>
+
+### 6.Spring Cloud Gateway - Filter 적용
+___
+- Client <-> spring cloud gateway <-> first, second service
+- 클라이언트가 spring cloud gateway에 어떤 요청을 전달하게 되면 first로갈지 second로 갈지 판단한 다음에 서비스 요청을 분기해준다.
+- spring cloud gateway 에서 요청이 들어오면(gateway handler mapping) 그게 어떤것인지 판단하고(predicate) 사전 필터, 사후필터(pre, post filter)
+- 작업은 property , java code 로 할 수 있다.
+
+<br>
+- java code로 라우팅 정보를 등록할 예정이니 cloud 관련 application.yml 파일은 잠시 주석 처리
+
+```java
+@Configuration
+public class FilterConfig {
+    @Bean
+    public RouteLocator gatewayRoutes(RouteLocatorBuilder builder) {
+        return builder.routes()
+                .route(r -> r.path("/first-service/**")
+                        .filters(f -> f.addRequestHeader("first-request", "first-request-header")
+                                .addResponseHeader("first-response", "first-response-header"))
+                        .uri("http://localhost:8081"))
+                .route(r -> r.path("/second-service/**")
+                        .filters(f -> f.addRequestHeader("second-request", "second-request-header")
+                                .addResponseHeader("second-response", "second-response-header"))
+                        .uri("http://localhost:8082"))
+                .build();
+    }
+}
+```
+- r 값이 전달되게 되면 패스를 확인 하고 필터적용해서 uri로 이동 시켜준다. 사용자로부터 First service라는 요청이 들어온다.
+- 그러면 url 로 이동, 중간에 request filter addRequestHeader("first-request", "first-request-header")
+- response filter 에는  .addRequestHeader("first-response", "first-response-header") 를 추가한다. 
+- yml에 있던 설정과 똑같은것을 자바로 한거다.
+
+```java
+    @GetMapping("/message")
+    public String message(@RequestHeader("first-request") String header){
+        log.info(header);
+        return "hello world in First Service";
+    }   //second service 에도 똑같이 메세지 남겨준다.
+```
+
+http://localhost:8080/first-service/message =>  
+INFO 37768 --- [nio-8081-exec-2] c.e.firstservice.FirstServiceController  : first-request-header 로그 확인 가능  
+response 에도 first-response: first-response-header 개발자 도구에서 확인가능
+
+<br>
+
+** application.yml 파일로 금방과 같은 작업을 한다. FilterConfig.java Configuration, bean 주석  
+
+```yaml
+spring:
+  application:
+    name: apigateway-service
+  cloud:
+    gateway:
+      routes:
+        - id: first-service
+          uri: http://localhost:8081/
+          predicates:
+            - Path=/first-service/**
+          filters:
+            - AddRequestHeader=first-request, first-request-header2
+            - AddResponseHeader=first-response, first-response-header2
+        - id: second-service
+          uri: http://localhost:8082/
+          predicates:
+            - Path=/second-service/**
+          filters:
+            - AddRequestHeader=second-request, second-request-header2
+            - AddResponseHeader=second-response, second-response-header2
+```
+
+- http://localhost:8000/first-service/message => 헤더 확인 가능
