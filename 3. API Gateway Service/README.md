@@ -408,3 +408,63 @@ Global Filter Start : request id -> bd2f928e-1
 Custom PRE Filter  : request id -> bd2f928e-1  
 Custom Post filter : response code -> 200 OK  
 Global Filter End : response code -> 200 OK   
+
+<br>
+
+### 9. Spring Cloud Gateway - Logging Filter
+___
+
+- LoggingFilter.java
+```java
+    @Override
+    public GatewayFilter apply(Config config) {
+        GatewayFilter filter = new OrderedGatewayFilter((exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+            ServerHttpResponse response = exchange.getResponse();
+
+            log.info("Logging Filter baseMessage : {} ", config.getBaseMessage());
+
+            if (config.isPreLogger()) {
+                log.info("Logging Pre Filter : request id -> {} ", request.getId());
+            }
+            return chain.filter(exchange).then(Mono.fromRunnable(()->{
+                if (config.isPostLogger()) {
+                    log.info("Logging Post Filter : response code -> {} ", response.getStatusCode());
+                }
+            }));
+        }, Ordered.HIGHEST_PRECEDENCE);
+
+        return filter;
+    }
+
+    @Data
+    public static class Config {
+        private String baseMessage;
+        private boolean preLogger;
+        private boolean postLogger;
+    }
+```
+- yml 파일에 LoggingFilter, 파라미터 등록
+```yaml
+          filters:
+            - name: CustomFilter # 추가적인 파라미터 넣으려면 name 을 넣어줘야한다.
+            - name: LoggingFilter
+              args:
+                baseMessage: Hi Logging filter
+                preLogger: true
+                postLogger: true
+```
+- filter 실행순서 
+- Gateway client <-> Gateway Handler <-> Global filter <-> Custom Filter <-> Logging Filter <-> Proxied Service
+- http://localhost:8000/second-service/check 실행시 아래와 같은 로그 출력, Logging 이 먼저 실행되는건 Ordered.HIGHEST_PRECEDENCE 떄문
+  
+Logging Filter baseMessage : Hi Logging filter  
+Logging Pre Filter : request id -> 4b6bee7d-3  
+Global Filter baseMessage : Spring cloud Gateway Global Filter  
+Global Filter Start : request id -> 4b6bee7d-3  
+Custom PRE Filter  : request id -> 4b6bee7d-3  
+Custom Post filter : response code -> 200 OK  
+Global Filter End : response code -> 200 OK  
+Logging Post Filter : response code -> 200 OK  
+
+<br>
