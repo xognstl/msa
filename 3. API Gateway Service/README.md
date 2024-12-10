@@ -280,3 +280,131 @@ spring:
 ```
 
 - http://localhost:8000/first-service/message => 헤더 확인 가능
+
+<br>
+
+### 7. Spring Cloud Gateway - Custom Filter 적용
+___
+
+- 사용자 정의 필터 : 로그 출력, 인증 처리, 로케일 변경 등에 사용
+- CustomFilter 는 AbstractGatewayFilterFactory 상속 받아서 사용
+- 구현 메소드 apply() 
+
+<br>
+
+- CustomFilter class 생성
+```java
+@Component
+@Slf4j
+public class CustomFilter extends AbstractGatewayFilterFactory<CustomFilter.Config> {
+    public CustomFilter() {
+        super(Config.class);
+    }
+
+    @Override
+    public GatewayFilter apply(Config config) {
+        // Custom Pre Filter
+        return (exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+            ServerHttpResponse response = exchange.getResponse();
+
+            log.info("Custom PRE Filter  : request id -> {} ", request.getId());
+
+            //Custom Post Filter
+            return chain.filter(exchange).then(Mono.fromRunnable(()->{
+                log.info("Custom Post filter : response code -> {}", response.getStatusCode());
+            }));
+        };
+    }
+
+    public static class Config {
+        // configuration 정보 입력
+    }
+}
+```
+- 첫번째 매개변수인 exchange 를 기자고 request, response 객체를 가져오고 처리가 끝나고 post filter 추가 할 수 있다.
+- 요청이 들어오면 사전 필터에서 요청 ID를 로그에 출력된다.
+- 요청이 체인(chain)을 따라 다른 필터나 백엔드 서비스로 전달된다.
+- 백엔드 서비스에서 응답을 받은 후 사후 필터가 실행되어 응답 상태 코드를 로그 출력
+
+<br>
+
+- yaml 파일 수정
+```yaml
+          filters:
+#            - AddRequestHeader=first-request, first-request-header2
+#            - AddResponseHeader=first-response, first-response-header2
+            - CustomFilter
+```
+- first, second service controller 추가
+- /message 는 헤더가 필요해서 check controller 추가한것.
+<br>
+
+```java
+    @GetMapping("/check")
+    public String check() {
+        return "Hi, this is a message from First Service";
+    }
+```
+
+- http://localhost:8000/first-service/check 호출 시 로그 확인 가능
+
+Custom PRE Filter  : request id -> 14e5a4d2-1  
+Custom Post filter : response code -> 200 OK 
+
+<br>
+*** pre filter 먼저 동작, chain filter 값을 반환시켜줌으로써 post filter 동작을 구현  
+
+<br>
+
+### 8. Spring Cloud Gateway - Global Filter
+___
+
+- 글로벌 필터는 어떠한 라우터 정보가 실행 된다 해도 공통적으로 다 시행 될 수 있다.
+- 커스텀 필터는 원하는 라우터 정보에다가 개별적으로 다 등록 해야 한다.  
+
+-GlobalFilter.java
+```java
+@Override
+public GatewayFilter apply(Config config) {
+    return (exchange, chain) -> {
+        ServerHttpRequest request = exchange.getRequest();
+        ServerHttpResponse response = exchange.getResponse();
+
+        log.info("Global Filter baseMessage : {} ", config.getBaseMessage());
+
+        if (config.isPreLogger()) {
+            log.info("Global Filter Start : request id -> {} ", request.getId());
+        }
+        return chain.filter(exchange).then(Mono.fromRunnable(()->{
+            if (config.isPostLogger()) {
+                log.info("Global Filter End : response code -> {} ", response.getStatusCode());
+            }
+        }));
+    };
+}
+
+@Data
+public static class Config {
+    private String baseMessage;
+    private boolean preLogger;
+    private boolean postLogger;
+}
+```
+-application.yml
+```yaml
+  cloud:
+    gateway:
+      default-filters:
+        - name: GlobalFilter
+          args:
+            baseMessage: Spring cloud Gateway Global Filter
+            preLogger: true
+            postLogger: true
+```
+- http://localhost:8000/first-service/check 실행시  호출 시 로그 확인 가능  
+Global Filter baseMessage : Spring cloud Gateway Global Filter  
+Global Filter Start : request id -> bd2f928e-1  
+Custom PRE Filter  : request id -> bd2f928e-1  
+Custom Post filter : response code -> 200 OK  
+Global Filter End : response code -> 200 OK   
