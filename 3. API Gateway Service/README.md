@@ -468,3 +468,70 @@ Global Filter End : response code -> 200 OK
 Logging Post Filter : response code -> 200 OK  
 
 <br>
+
+### 10. Spring Cloud Gateway - Load Balancer
+___
+
+#### Spring Cloud Gateway - Eureka 연동  
+- Eureka Server: Service Discovery, Registration
+- /first-service/welcome 호출시 API Gateway로 전달되고, 유레카로부터 마이크로서비스의 위치 정보를 전달 받고 해당하는 정보로 직접 포워딩 시켜주는 과정
+
+<br>
+
+- 방법
+1. eureka-client, application.yml(유레카에 등록) (Spring cloud Gateway, first, second service)
+- pom.xml (Spring cloud gateway, first, second service)
+```xml 
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+```
+- application.yml (Spring cloud gateway, first, second service)
+```yaml
+client:
+register-with-eureka: true
+fetch-registry: true
+service-url:
+  defaultZone: http://localhost:8761/eureka
+```
+
+3. application.yml(Spring cloud gateway) : discovery server에 등록되어 있는 이름으로 포워딩
+```yaml
+routes:
+- id: first-service
+  uri: lb://MY-FIRST-SERVICE
+```
+3. Eureka Server 에 service 등록 확인  
+   <img src="https://github.com/user-attachments/assets/ae0a8fa3-bc68-4e02-93cf-7ef73674578a" width="700" height="150">
+
+4. http://localhost:8000/second-service/welcome => 정상 확인
+
+5. First, Second Service 2개 기동
+- port 번호 0번 , instance-id 추가 
+```yaml
+  instance:
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+```
+
+```java
+public class FirstServiceController {   // port 출력
+    Environment env;
+
+    @Autowired
+    public FirstServiceController(Environment env) {
+        this.env = env;
+    }
+   @GetMapping("/check")
+   public String check(HttpServletRequest request) {
+      log.info("Server port = {}", request.getServerPort());
+      return String.format("Hi, this is a message from First Service on PORT %s",
+              env.getProperty("local.server.port"));
+   }
+}
+```
+- eureka, spring cloud gateway, first service2개 , second service 2개 총6개가 기동 되었다.
+- <img src="https://github.com/user-attachments/assets/171c8801-911d-4645-bfaa-8984889d4472" width="700" height="150">
+- http://localhost:8000/first-service/check => 
+- Hi, this is a message from First Service on PORT 54271, Hi, this is a message from First Service on PORT 54244
+- 위와 같이 라우팅 기능과 로드밸러스 기능도 사용가능
