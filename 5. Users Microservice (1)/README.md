@@ -110,3 +110,186 @@ ___
 
 <br>
 
+### 4. Users Microservice - 사용자 추가
+___
+
+#### 회원 가입
+
+- modelmapper : dto 객체 => userEntity 객체로 바꿔줄 수 있다.
+- 데이터 흐름 : requestUser.java -> UserDto.java -> userEntity
+
+- RequestUser.java
+```java
+@Data
+public class RequestUser {
+    @NotNull(message = "Email cannot be null")
+    @Size(min = 2, message = "Email not be less than two characters")
+    @Email
+    private String email;
+
+    @NotNull(message = "Name cannot be null")
+    @Size(min = 2, message = "Name not be less than two characters")
+    private String name;
+
+    @NotNull(message = "Password cannot be null")
+    @Size(min = 8, message = "Password must be equal or grater than 8 characters")
+    private String pwd;
+}
+```
+
+- UserDto.java
+```java
+@Data
+public class UserDto {
+    private String email;
+    private String name;
+    private String pwd;
+    
+    private String userId;
+    private Date createdAt;
+    
+    private String encryptedPwd;
+}
+```
+
+- jpa , modelmapper dependency 추가
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.modelmapper</groupId>
+    <artifactId>modelmapper</artifactId>
+    <version>2.3.8</version>
+</dependency>
+```
+
+- UserEntity.java
+```java
+@Data
+@Entity
+@Table(name = "users")
+public class UserEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    @Column(nullable = false, length = 50, unique = true)
+    private String email;
+    @Column(nullable = false, length = 50)
+    private String name;
+    @Column(nullable = false, unique = true)
+    private String userId;
+    @Column(nullable = false, unique = true)
+    private String encryptedPwd;
+}
+```
+
+- UserRepository.java
+```java
+public interface UserRepository extends CrudRepository<UserEntity, Long> {
+}
+```
+
+- UserService.java (interface)
+```java
+public interface UserService {
+    UserDto createUser(UserDto userDto);
+}
+```
+
+- UserServiceImpl.java
+```java
+@Service
+public class UserServiceImpl implements UserService {
+
+    @Autowired UserRepository userRepository;
+
+    @Override
+    public UserDto createUser(UserDto userDto) {
+        userDto.setUserId(UUID.randomUUID().toString());
+        ModelMapper mapper = new ModelMapper();
+        mapper.getConfiguration().setMatchingStrategy(MatchingStrategies.STRICT); //모델메퍼가 변환시킬 수 있는 환경 설정 정보 지정
+        UserEntity userEntity = mapper.map(userDto, UserEntity.class);
+        userEntity.setEncryptedPwd("encrypted_password");
+
+        userRepository.save(userEntity);
+        UserDto returnUserDto = mapper.map(userEntity, UserDto.class);
+
+        return returnUserDto;
+    }
+}
+```
+
+- UserController.java , createUser controller 추가
+```java
+@RestController
+@RequestMapping("/")
+public class UserController {
+    private Environment env;
+    private UserService userService;
+
+    @Autowired
+    public UserController(Environment env, UserService userService) {
+        this.env = env;
+        this.userService = userService;
+    }
+    @PostMapping("/users")
+    public String createUser(@RequestBody RequestUser user) {
+        ModelMapper mapper = new ModelMapper();
+        mapper.getConfiguration().setMatchingStrategy(MatchingStrategies.STRICT);
+        UserDto userDto = mapper.map(user, UserDto.class);
+        userService.createUser(userDto);
+
+        return "Create user method is called";
+    }
+}
+```
+
+- 데이터 베이스 정보 추가
+```yaml
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb
+```
+- user-service 기동 후 127.0.0.1:64585/users , 정상  
+```json
+{
+    "email": "xognstl@naver.com",
+    "name": "taehoon",
+    "pwd": 1234
+}
+```
+
+- response 200 => 201 로 변경
+- craeteUser 를 하면 반환 시켜줄 vo 객체
+```java
+@Data
+public class ResponseUser {
+    private String email;
+    private String name;
+    private String userId;
+}
+```
+```java
+@PostMapping("/users")
+public ResponseEntity createUser(@RequestBody RequestUser user) {
+        ModelMapper mapper = new ModelMapper();
+        mapper.getConfiguration().setMatchingStrategy(MatchingStrategies.STRICT);
+        UserDto userDto = mapper.map(user, UserDto.class);
+        userService.createUser(userDto);
+
+        ResponseUser responseUser = mapper.map(userDto, ResponseUser.class);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(responseUser);
+        }
+```
+
+- 127.0.0.1:64979/users 실행시 아래와 같이 반환된다.
+```json
+{
+    "email": "xognstl@naver.com",
+    "name": "taehoon",
+    "userId": "aa4d5cc1-9714-445e-bf0d-649ddd82d895"
+}
+```
