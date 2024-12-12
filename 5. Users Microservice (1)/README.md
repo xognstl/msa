@@ -293,3 +293,71 @@ public ResponseEntity createUser(@RequestBody RequestUser user) {
     "userId": "aa4d5cc1-9714-445e-bf0d-649ddd82d895"
 }
 ```
+
+
+<br>
+
+### 5. Users Microservice - Spring Security 연동
+___
+
+- Spring Security
+- Authentication(인증) + Authorization(권한)  
+
+1. 애플리케이션에 spring security jar 를 Dependency 에 추가
+2. WebSecurityConfigurerAdapter 를 상속받는 Security Configuration 클래스 생성
+3. Security Configuration 클래스에 @EnableWebSecurity 추가
+4. Authentication -> configure(AuthenticationManagerBuilder auth) 메서드 재정의
+5. Password encode 를 위한 BCryptPasswordEncoder 빈 정의
+6. Authorization -> configure(HttpSecurity http) 메서드 재정의
+
+- dependency 추가
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+```
+
+- WebSecurity.java 추가
+```java
+@Configuration
+@EnableWebSecurity // web security 용도로 사용할 것이다.
+public class WebSecurity extends WebSecurityConfigurerAdapter {
+    @Override   // 권한
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf().disable();
+        http.authorizeRequests().antMatchers("/users/**").permitAll();
+        //authorizeRequests : 허용할 수 있는 작업을 제약 , /users/** 를 가져야만 통과
+        http.headers().frameOptions().disable(); // 이게 있어야 h2-console 들어갈 수 있음
+    }
+}
+```
+- 비밀번호 암호화 작업
+- UserServiceImpl
+- UserServiceImpl 에서 생성자 주입시 BCryptPasswordEncoder passwordEncoder 어디에서도 생성한적이 없어 Autowired 가 안된다.
+- 사용하려면 UserApplication 에 BCryptPasswordEncoder 를 빈으로 등록 해줘야한다.
+```java
+public class UserServiceApplication {
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+```java
+public class UserServiceImpl implements UserService {
+    UserRepository userRepository;
+    BCryptPasswordEncoder passwordEncoder;
+
+    //BCryptPasswordEncoder passwordEncoder 어디에서도 생성한적이 없어 Autowired 가 안된다.
+    @Autowired
+    public UserServiceImpl(UserRepository userRepository, BCryptPasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+    userEntity.setEncryptedPwd(passwordEncoder.encode(userDto.getPwd()));
+}
+```
+
+- 127.0.0.1:63431/users => create 하면 비밀번호가 암호화 된것을 확인 할 수있다.
