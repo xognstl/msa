@@ -101,18 +101,6 @@ public interface UserRepository extends CrudRepository<UserEntity, Long> {
 
 - UserController.java
 ```java
-@PostMapping("/users")
-public ResponseEntity createUser(@RequestBody RequestUser user) {
-    ModelMapper mapper = new ModelMapper();
-    mapper.getConfiguration().setMatchingStrategy(MatchingStrategies.STRICT);
-    UserDto userDto = mapper.map(user, UserDto.class);
-    userService.createUser(userDto);
-
-    ResponseUser responseUser = mapper.map(userDto, ResponseUser.class);
-
-    return ResponseEntity.status(HttpStatus.CREATED).body(responseUser);
-}
-
 @GetMapping("/users")
 public ResponseEntity<List<ResponseUser>> getUsers() {
     Iterable<UserEntity> userList = userService.getUserByAll();
@@ -123,6 +111,15 @@ public ResponseEntity<List<ResponseUser>> getUsers() {
     });
 
     return ResponseEntity.status(HttpStatus.OK).body(result);
+}
+
+@GetMapping("/users/{userId}")
+public ResponseEntity<ResponseUser> getUser(@PathVariable("userId") String userId) {
+    UserDto userDto = userService.getUserByUserId(userId);
+
+    ResponseUser returnValue = new ModelMapper().map(userDto, ResponseUser.class);
+
+    return ResponseEntity.status(HttpStatus.OK).body(returnValue);
 }
 ```
 
