@@ -156,3 +156,27 @@ ___
     - RewritePath=/user-service/(?<segment>.*), /$\{segment}
 ```
 - POST 127.0.0.1:8000/user-service/login => 200 정상 , 비밀번호 틀리면 401 Unauthorized 에러
+
+
+  <br>
+
+### 4. Users Microservice - 로그인 처리 과정
+___
+
+1. 사용자 email, password 입력  
+
+2. AuthenticationFilter 클래스의 attemptAuthentication 메소드가 처리    
+- (attemptAuthentication 함수에서 request 정보에 전달했던 데이터 값을 RequestLogin.class로 바꿔서 로그인 처리 요청)    
+- UsernamePasswordAuthenticationToken 형태로 바꿔서 사용  
+
+3. UserDetailsService 클래스의 loadUserByUsername 메소드 실행 
+- repository 의 findByEmail 을 이용해 해당 데이터 검색 
+- Spring security의 User 객체로 변경해서 사용  
+
+4. AuthenticationFilter 클래스의 successfulAuthentication 에서 토큰생성(userId로 emailX)
+- email을 이용해 db에서 실제 오브젝트값 가져옴(userDto)
+- userDto 객체의 userId를 이용해 JWT 생성
+- 생성된 token 값을 response header에 저장
+- 클라이언트에게 반환
+
+<br>
