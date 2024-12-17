@@ -180,3 +180,226 @@ ___
 - 클라이언트에게 반환
 
 <br>
+
+### 5. Users Microservice - 로그인 성공 처리
+___
+
+- AuthenticationFilter class는 빈으로 등록해서 쓰는게 아니라 스프링 시큐리티에서 getAuthenticationFilter() 를 이용해 인스턴스를 직접 생성해서 사용한다.
+
+- userService.java 에 getUserDetailsByEmail 추가
+```java
+public interface UserService extends UserDetailsService {
+    UserDto getUserDetailsByEmail(String userName);
+}
+
+```
+
+- getUserDetailsByEmail 메소드 
+```java
+@Service
+public class UserServiceImpl implements UserService {
+    @Override
+    public UserDto getUserDetailsByEmail(String email) {
+        UserEntity userEntity = userRepository.findByEmail(email);
+        if (userEntity == null) {
+            throw new UsernameNotFoundException(email);
+        }
+        UserDto userDto = new ModelMapper().map(userEntity, UserDto.class);
+        return userDto;
+    }
+}
+```
+
+- WebSecurity 에서 authenticationFilter 생성 부분 변경
+```java
+@Configuration
+@EnableWebSecurity
+public class WebSecurity extends WebSecurityConfigurerAdapter {
+    //AuthenticationFilter 객체를 생성하고 반환하는 역할
+    private AuthenticationFilter getAuthenticationFilter() throws Exception {
+        AuthenticationFilter authenticationFilter = new AuthenticationFilter(authenticationManager(), userService, env);
+//        authenticationFilter.setAuthenticationManager(authenticationManager()); // 인증 처리를 하기 위한 메니저
+
+        return authenticationFilter;
+    }
+
+}
+
+```
+
+- AuthenticationFilter.java 의 successfulAuthentication 에서 userId 가져오는 로직 추가
+```java
+@Slf4j
+public class AuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+    @Override   // 로그인이 성공했을 때 입력 ID, Password가 실제 성공했을 때 어떤 값을 반환 시켜줄건지 처리
+    protected void successfulAuthentication(HttpServletRequest request,
+                                            HttpServletResponse response,
+                                            FilterChain chain,
+                                            Authentication authResult) throws IOException, ServletException {
+        log.debug(((User)authResult.getPrincipal()).getUsername()); // 인증이 완료된 결과값
+        String userName = ((User)authResult.getPrincipal()).getUsername();
+        UserDto userDetails = userService.getUserDetailsByEmail(userName);  // userId 를 가져올 수 있다.
+    }
+}
+```
+
+<br>
+
+### 6. Users Microservice - JWT 생성
+___
+
+- JWT dependency 추가
+```yaml
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt</artifactId>
+    <version>8.9.1</version>
+</dependency>
+```
+
+- authentication.filter class 에서 사용할 정보 입력
+```yaml
+token:
+  expiration_time: 86400000
+  secret: user_token
+```
+
+- userDetails 에서 가져온 userId 를 이용하여 토큰을 생성하는 로직 추가
+```java
+@Slf4j
+public class AuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+    @Override
+    protected void successfulAuthentication(HttpServletRequest request,
+                                            HttpServletResponse response,
+                                            FilterChain chain,
+                                            Authentication authResult) throws IOException, ServletException {
+        log.debug(((User)authResult.getPrincipal()).getUsername()); // 인증이 완료된 결과값
+        String userName = ((User)authResult.getPrincipal()).getUsername();
+        UserDto userDetails = userService.getUserDetailsByEmail(userName);  // userId 를 가져올 수 있다.
+
+        String token = Jwts.builder()
+                .setSubject(userDetails.getUserId())    //토큰 생성
+                .setExpiration(new Date(System.currentTimeMillis()
+                        + Long.parseLong(env.getProperty("token.expiration_time"))))
+                .signWith(SignatureAlgorithm.HS512, env.getProperty("token.secret")) // 암호화
+                .compact();
+
+        response.addHeader("token", token);
+        response.addHeader("userId", userDetails.getUserId());
+    }
+}
+```
+- POST 127.0.0.1:8000/user-service/login => header 에서 token 확인 가능 
+
+<br>
+
+### 7. Users Microservice - JWT 처리 과정
+___
+- 세션, 쿠키로 인증 => 모바일에서 유효하게 사용X
+- 토큰을 이용해 사용자가 정상적으로 로그인이 된것을 서버측에 알려주면서 인증처리가 유효하게 만든다.
+- 클라이언트 독립적인 서비스, 캐시서버 인증처리 가능, 지속적인 토큰 저장
+- 
+- 토큰값 jwt.io 에서 decode 하면 아래와 같이 나온다.
+```json
+{
+  "sub": "40bebf71-a06c-4ca3-8f1d-997f3916da13",
+  "exp": 1734488087
+}
+```
+
+- API Gateway Service 에 Spring Security, JWT Token 사용 추가
+
+- dependency 추가
+```xml
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt</artifactId>
+    <version>0.9.1</version>
+</dependency>
+```
+- api Gateway service 에 AuthorizationHeaderFilter.java 생성
+  
+- yaml 에 AuthorizationHeaderFilter 추가
+```yaml
+- id: user-service
+  uri: lb://USER-SERVICE
+  predicates:
+    - Path=/user-service/**
+    - Method=GET
+  filters:
+    - RemoveRequestHeader=Cookie #초기화
+    - RewritePath=/user-service/(?<segment>.*), /$\{segment}
+    - AuthorizationHeaderFilter
+
+token:
+  secret: user_token
+```
+  
+- API 를 호출할 때 사용자가 헤더에 토큰을 전달해주는 작업
+- apply 함수 로그인 -> 토큰 받음 -> user(토큰 정보가지고 요청) -> header(include token)
+```java
+@Component
+@Slf4j
+public class AuthorizationHeaderFilter extends AbstractGatewayFilterFactory<AuthorizationHeaderFilter.Config> {
+
+    Environment env;
+
+    public AuthorizationHeaderFilter(Environment env) {
+        this.env = env;
+    }
+    @Override
+    public GatewayFilter apply(Config config) {
+        return ((exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+
+            if(!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)){   // AUTHORIZATION 관련된 값 존재 유무
+                return onError(exchange, "no Authorization header", HttpStatus.UNAUTHORIZED);
+            }
+
+            String authorizationHeader = request.getHeaders().get(HttpHeaders.AUTHORIZATION).get(0);    // 토큰 값 가져오기
+            String jwt = authorizationHeader.replace("Bearer", "");
+            
+            if (!isJwtValid(jwt)) { // Jwt token valid
+                return onError(exchange, "JWT token is not valid", HttpStatus.UNAUTHORIZED);
+            }
+            
+            return chain.filter(exchange);
+        });
+    }
+
+    // jwt decode 했을때 Subject 를 토큰으로 부터 추출한 후 값이 정상적인 계정 값인지 판단
+    private boolean isJwtValid(String jwt) {
+        boolean returnValue = true;
+
+        String subject = null;
+        try {
+            subject = Jwts.parser().setSigningKey(env.getProperty("token.secret"))
+                    .parseClaimsJws(jwt).getBody()
+                    .getSubject();  // 토큰을 문자형 데이터 값으로 파싱하기 위해 parseClaimsJws로 파싱 , subject 값만 추출
+        } catch (Exception exception) {
+            returnValue = false;
+        }
+
+        if (subject == null || subject.isEmpty()) {
+            returnValue = false;
+        }
+
+        return returnValue;
+    }
+
+    // Mono(단일), Flux(다중)
+    private Mono<Void> onError(ServerWebExchange exchange, String err, HttpStatus httpStatus) {
+        ServerHttpResponse response = exchange.getResponse();   // response 객체 받아옴
+        response.setStatusCode(httpStatus);
+
+        log.error(err);
+
+        return response.setComplete();
+    }
+    
+
+    public static class Config {
+
+    }
+}
+```
