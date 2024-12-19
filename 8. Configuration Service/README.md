@@ -123,4 +123,99 @@ management:
 
 <br>
 
+### 4. Spring Cloud Gateway에서 Spring Cloud Config 연동
+___
+1. config, bootstrap, actuator dependency 추가
+2. bootstrap.yml 추가 (Config-service 정보)
+3. actuator : refresh, health, beans, httptrace 추가
+4. application.yml 에 User-Service 의 actuator 정보 추가
 
+<br>
+
+- httptrace를 사용하기 위해선 빈등록 필요
+
+```java
+@SpringBootApplication
+public class ApigatewayServiceApplication {
+    @Bean
+    public HttpTraceRepository httpTraceRepository() {
+        return new InMemoryHttpTraceRepository();
+    }
+}
+```
+-yaml 파일에 actuator route 등록
+```yaml
+- id: user-service
+  uri: lb://USER-SERVICE
+  predicates:
+    - Path=/user-service/actuator/**
+    - Method=GET,POST
+  filters:
+    - RemoveRequestHeader=Cookie
+    - RewritePath=/user-service/(?<segment>.*), /$\{segment}
+```
+
+<br>
+
+### 5. Profiles을 사용한 Configuration 적용
+___
+
+- ecommerce-dev.yml , ecommerce-prod.yml 여러가지를 사용하는 방법
+- yml파일 여러개 생성 후 profiles 추가(user, gateway) 
+```yaml
+spring:
+  cloud:
+    config:
+      uri: http://127.0.0.1:8888
+      name: ecommerce
+  profiles:
+    active: prod
+```
+- user는 dev, gateway는 prod 로 설정하고 회원가입 -> 로그인 후 토큰으로 user-service의 health check 를 해보면  
+401 에러가난다. gateway를 이용하여 user-service로 접근하기때문에 서로다르니 에러가나는것.
+
+<br>
+
+### 6. Remote git Repository
+___
+
+- git remote -v : 현재 remote 되있는것
+- git remote add origin https://github.com/xognstl/spring-cloud-config.git
+- git push --set-upstream origin master : push 처음에만 upstream 옵션 사용
+- uri 변경 id/ password 도 입력 가능
+```yaml
+spring:
+  application:
+    name: config-service
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/xognstl/spring-cloud-config.git
+          username: xognstl@naver.com
+          password: password
+```
+
+<br>
+
+### 7. Native File Repository
+___
+
+- config-service 의 yaml 파일에 profiles.active , native.search-locations 추가
+```yaml
+spring:
+  application:
+    name: config-service
+  profiles:
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: F:\msa_project\native-file-repo
+        git:
+          uri: F:\msa_project\git-local-repo
+```
+
+- http://127.0.0.1:8888/ecommerce/dev, http://127.0.0.1:8888/ecommerce/default 등 테스트
+- http://127.0.0.1:8888/user-service/native 
