@@ -37,21 +37,26 @@ ___
 #### 구동 방법
 - Zookeeper, Kafka 서버 구동
   - $KAFKA_HOME/bin/zookeeper-server-start.sh $KAFKA_HOME/config/zookeeper.properties
-  - .\bin\windows\zookeeper -server-start.bat .\config\zookeeper.properties
-  - $KAFKA_HOME/bin/kafka-server-start.sh $KAFKA_HOME/config/kafka.properties 
-  - .\bin\windows\kafka -server-start.bat .\config\kafka.properties
+  - .\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
+  - $KAFKA_HOME/bin/kafka-server-start.sh $KAFKA_HOME/config/server.properties 
+  - .\bin\windows\kafka-server-start.bat .\config\server.properties
 - Topic 생성 / 프로듀서, 컨슈머를 콘솔 상태에서 테스트 할 수 있는 프로그램
   - 카프카는 프로듀서에서 메시지를 보내면 데이터는 Topic 이란 곳에 저장된다. 사용자가 임의로 토픽 생성 가능
-  - $KAFKA_HOME/bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092\ --partitions 1
+  - $KAFKA_HOME/bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092 --partitions 1
+  - .\bin\windows\kafka-topics.bat  --create --topic quickstart-events --bootstrap-server localhost:9092 --partitions 1
   - Topic에 데이터를 보내고, 토픽에 쌓였던 데이터가 다시 가져가는 방식
 - Topic 목록 확인
   - $KAFKA_HOME/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+  - .\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --list
 - Topic 정보 확인
   - $KAFKA_HOME/bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
+  - .\bin\windows\kafka-topics.bat --describe --topic quickstart-events --bootstrap-server localhost:9092
 - 메시지 생산
   - $KAFKA_HOME/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic quickstart-events
+  - .\bin\windows\kafka-console-producer.bat --broker-list localhost:9092 --topic quickstart-events
 - 메시지 소비
   - $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic quickstart-events --from-beginning
+  - .\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic quickstart-events --from-beginning
     
 - cmd 창 4개 기동(zookeeper, kafka, producer, consumer)
 - 주키퍼 실행 -> 카프카 실행 -> 토픽 생성 -> Producer 실행(메시지 생산) -> Consumer 실행(메시지 소비)
