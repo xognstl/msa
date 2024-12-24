@@ -84,3 +84,55 @@ ___
 - db 초기화 .\bin\mariadb-install-db.exe --datadir=C:\mariadb-10.5.8-winx64\data  --service=mariaDB --port=3306 --password=1234
 
 <br>
+
+### 5. Orders Microservice에서 MariaDB 연동
+___
+- net start mariaDB , mysql.server start(linux)
+- mysql -u root -p
+- create database mydb; => db 생성 => use mydb; => db 사용
+- mysql dependency 추가 -> h2 콘솔에서 접속가능 
+```text
+Driver Class : org.mariadb.jdbc.Driver
+JDBC URL : jdbc:mysql://localhost:3306/mydb
+root/1234
+
+create table users(
+id int auto_increment primary key,
+user_id varchar(20),
+pwd varchar(20),
+name varchar(20),
+created_at datetime default NOW()
+);
+```
+- Kafka Connect 를 통해 데이터가 insert 데이터를 감지했다가 새로운 데이터베이스에 옮기는 작업 
+
+<br>
+
+### 6. Kafka Connect 설치
+___
+- Kafka Connect는 Apache Kafka에서 데이터를 쉽게 수집하고 전달할 수 있도록 설계된 데이터 통합 프레임워크
+- Source Connector: 외부 시스템에서 데이터를 가져와 Kafka 토픽으로 보냄.
+- Sink Connector: Kafka 토픽 데이터를 외부 시스템으로 보냄
+
+
+- 설치 방법
+- curl -O http://packages.confluent.io/archive/6.1/confluent-community-6.1.0.tar.gz
+- tar xvf confluent-community-6.1.0.tar.gz
+- Kafka connect 설정 
+  - $KAFKA_HOME/config/connect-distributed.properties 사용 해도되고 ,  
+  $KAFKA_CONNECT_HOME/etc/kafka/connect-distributed.properties 사용 해도됨.
+- Kafka connect 실행
+  - ./bin/connect-distributed ./etc/kafka/connect-distributed.properties
+  - .\bin\windows\connect-distributed.bat .\etc\kafka\connect-distributed.properties
+
+- Topic 확인 : 기존에 등록했던 Topic 이외에 connect를 기동하면 자동적으로 4개 추가로 생성   
+.\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --list  
+kafka connect 가 소스에서 읽어왔던 데이터들을 저장하기위한 토픽
+- jdbc connector 다운(Source, Sink에서 사용) : https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc
+
+```text
+config\tools-log4j.properties 가 없다는 에러나면 
+connect-distributed.bat의 log4j 경로를 
+%BASE_DIR%/config/connect-log4j.properties에서 
+%BASE_DIR%/etc/kafka/connect-log4j.properties로 바꾸어주면 해결 가능
+```
