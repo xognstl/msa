@@ -80,4 +80,7 @@ ___
 - source system(hive, jdbc) -> kafka connect source -> kafka cluster -> kafka connect sink -> target system(s3..)
 - 저장되어 있는 자료를 복제잡업 , mysql 데이터 -> oracle 전달 할때 사용
 - db -> db
-- maria db 다운로드
+- maria db 다운로드 ( 10.5.8 받음)
+- db 초기화 .\bin\mariadb-install-db.exe --datadir=C:\mariadb-10.5.8-winx64\data  --service=mariaDB --port=3306 --password=1234
+
+<br>
