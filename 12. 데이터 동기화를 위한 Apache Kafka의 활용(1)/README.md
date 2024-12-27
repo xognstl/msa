@@ -144,3 +144,99 @@ connect-distributed.bat의 log4j 경로를
   - C:\Users\diquest\.m2\repository\org\mariadb\jdbc\mariadb-java-client\2.7.2 에 있는 JDBC Driver를 
   - F:\msa_project\kafka-connect\confluent-7.3.1\share\java\kafka 로 복사
 
+<br>
+
+### 7. Kafka Source Connect 사용
+___
+- Kafka Source Connect 추가
+-  Kafka Source Connector 생성 : POST http://127.0.0.1:8083/connectors
+```json
+{
+    "name" : "my-source-connect",
+    "config" : {
+        "connector.class" : "io.confluent.connect.jdbc.JdbcSourceConnector",
+        "connection.url":"jdbc:mariadb://localhost:3306/mydb",
+        "connection.user":"root",
+        "connection.password":"1234",
+        "mode": "incrementing",
+        "incremental.column.name" : "id",
+        "table.whitelist":"users",
+        "topic.prefix" : "my_topic_",
+        "tasks.max" : "1"
+    }
+}
+```
+- Kafka Connect 목록 확인
+  - curl http://localhost:8083/connectors
+- Kafka Connect 확인
+  - curl http://localhost:8083/connectors/my-source-connect/status
+
+- 테스트 방법
+  - mariadb 에서 데이터 추가 =>  insert into users(user_id, pwd, name) values('user1', 'test1111', 'User name');
+  - insert 후 토픽을 조회하면 아까 생성한 my-topic-users 를 조회할 수 있다.
+  - .\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic my_topic_users --from-beginning
+  - Connector 가 변경사항을 감지하면 토픽으로 이동시켜준다. 
+  ```json
+  {
+    "schema":{
+      "type":"struct",
+      "fields":[
+      {"type":"int32","optional":false,"field":"id"},
+      {"type":"string","optional":true,"field":"user_id"},
+      {"type":"string","optional":true,"field":"pwd"},
+      {"type":"string","optional":true,"field":"name"},
+      {"type":"int64","optional":true,"name":"org.apache.kafka.connect.data.Timestamp","version":1,"field":"created_at"}
+      ],
+      "optional":false,
+      "name":"users"
+    },
+    "payload":{
+      "id":2,
+      "user_id":"admin",
+      "pwd":"admin1",
+      "name":"administrator",
+      "created_at":1735312139000
+    }
+  }
+  ```
+  - 데이터베이스가 변동되면 토픽에 출력된다.
+
+<br>
+
+### 8. Kafka Sink Connect 사용
+___
+- Topic에 소스 커넥트에서 어떤 데이터를 전달하게되면 Topic에 그 데이터가 쌓인다.   
+Sink connect는 토픽에 전달된 데이터를 가지고 와서 자기가 사용하는 것
+- Users 테이블에 데이터가 insert, update 되면 해당 값이 Sink Connect 테이블에도 똑같이 반영된다.
+
+-  Kafka Sink Connector 생성 : POST http://localhost:8083/connectors
+```json
+{
+  "name" : "my-sink-connect",
+  "config" : {
+    "connector.class" : "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "connection.url":"jdbc:mariadb://localhost:3306/mydb",
+    "connection.user":"root",
+    "connection.password":"1234", 
+    "auto.create":"true", //topic의 이름과 같은 테이블 생성 
+    "auto.evolve":"true",
+    "delete.enabled":"false",
+    "task.max":"1",
+    "topics":"my_topic_users"
+  }
+}
+```
+- show tables; 하면 my_topic_users 테이블 생성 확인 가능, topic에 있는 데이터도 복사된다.
+-  users 테이블에 신규로 데이터를 insert 하면 my_topic_users 에도 똑같이 insert 되는것을 확인 할 수 있다.
+
+#### Kafka Producer를 이용해서 Kafka Topic에 데이터 직접 전송
+- Kafka Producer 데이터 전송 ->  Topic 에 추가 -> Maria DB 추가
+
+- .\bin\windows\kafka-console-producer.bat --broker-list localhost:9092 --topic my_topic_users : Producer 실행
+- producer 에 직접 아래와 같이 포멧에 맞게 데이터 전달
+```text
+{"schema":{"type":"struct","fields":[{"type":"int32","optional":false,"field":"id"},{"type":"string","optional":true,"field":"user_id"},{"type":"string","optional":true,"field":"pwd"},{"type":"string","optional":true,"field":"name"},{"type":"int64","optional":true,"name":"org.apache.kafka.connect.data.Timestamp","version":1,"field":"created_at"}],"optional":false,"name":"users"},"payload":{"id":4,"user_id":"xognstl","pwd":"user6","name":"user6","created_at":1735314642000}}
+```
+- users 테이블에는 금방 입력한 데이터는 없다. users는 토픽으로부터 데이터를 가져오는 것이 아니라 자신이 가지고 있는 데이터를  
+토픽에 보내주는 역할을 하는 것이기 때문에 Producer가 집어넣은 데이터는 없다.
+- 하지만 sink connect 와 연결되어 있는 my_topic_users 에는 데이터가 있다.
