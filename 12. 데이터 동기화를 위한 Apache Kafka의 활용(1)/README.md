@@ -128,7 +128,6 @@ ___
 - Topic 확인 : 기존에 등록했던 Topic 이외에 connect를 기동하면 자동적으로 4개 추가로 생성   
 .\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --list  
 kafka connect 가 소스에서 읽어왔던 데이터들을 저장하기위한 토픽
-- jdbc connector 다운(Source, Sink에서 사용) : https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc
 
 ```text
 config\tools-log4j.properties 가 없다는 에러나면 
@@ -136,3 +135,12 @@ connect-distributed.bat의 log4j 경로를
 %BASE_DIR%/config/connect-log4j.properties에서 
 %BASE_DIR%/etc/kafka/connect-log4j.properties로 바꾸어주면 해결 가능
 ```
+
+- jdbc connector 다운(Source, Sink에서 사용) : https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc
+- F:\msa_project\kafka-connect\confluent-7.3.1\etc\kafka\connect-distributed.properties 파일에 plugin.path 등록
+- plugin.path=\F:\msa_project\kafka-connect\confluentinc-kafka-connect-jdbc-10.6.3\lib
+
+- JDBC Connector 테스트를 위한 Mariadb JDBC Driver 복사
+  - C:\Users\diquest\.m2\repository\org\mariadb\jdbc\mariadb-java-client\2.7.2 에 있는 JDBC Driver를 
+  - F:\msa_project\kafka-connect\confluent-7.3.1\share\java\kafka 로 복사
+
