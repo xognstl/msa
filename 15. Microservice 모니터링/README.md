@@ -57,3 +57,75 @@ public class UserController {
 ```
 - welcome, status 메소드 실행 후 127.0.0.1:52705/actuator/metrics 를 호출하면 user.status, users.welcome을 확인 할 수 있다.
 - 127.0.0.1:52705/actuator/prometheus 호출한 것에 대한 정보가 있다.
+
+<br>
+
+### 2. Prometheus와 Grafana
+___
+- Prometheus
+  - Metrics 를 수집하고 모니터링 및 알람에 사용되는 오픈소스 애플리케이션
+  - Time Series Database(TSDB) 사용 => 각종 지표가 시간순으로 정보가 남는다.
+  - Pull 방식의 구조와 다양한 Metric Exporter 제공
+  - 시계열 DB에 Metrics 저장 -> 조회 가능 (Query)
+
+- Grafana
+    - 데이터 시각화, 모니터링 및 분석을 위한 오픈소스 애플리케이션
+    - 시계열 데이터를 시각화하기 위한 대시보드 제공
+
+- 프로메테우스에서 스프링 클라우드가 수집했던 정보를 가져와 저장한다. 그 정보를 가지고 그라파나 시각화 시켜준다.
+
+- prometheus 다운로드 https://prometheus.io/download/
+- yaml 파일에 prometheus 다운 받은곳이랑 지정해줘야함.
+- prometheus.exe 파일로 서버 실행
+  - .\prometheus.exe
+  - ./prometheus --config.file=prometheus.yml
+- 127.0.0.1:9090 Prometheus Dashboard
+
+- Grafana 다운로드 https://grafana.com/get/?tab=self-managed 
+- .\bin\grafana-server.exe server 실행
+- ./bin/garafana-server
+- http:127.0.0.1:3000 admin/admin 
+- prometheus 와 연동
+
+- apigateway 에 order-service 의 actuator 정보 추가
+```yaml
+- id: order-service
+  uri: lb://ORDER-SERVICE
+  predicates:
+    - Path=/order-service/actuator/**
+    - Method=GET
+  filters:
+    - RemoveRequestHeader=Cookie
+    - RewritePath=/order-service/(?<segment>.*), /$\{segment}
+```
+- prometheus.yml
+```yaml
+static_configs:
+  - targets: ["localhost:9090"]
+- job_name: 'user-service'
+  scrape_interval: 15s
+  metrics_path: '/user-service/actuator/prometheus'
+  static_configs:
+    - targets: ['localhost:8000']
+- job_name: 'apigateway-service'
+  scrape_interval: 15s
+  metrics_path: '/actuator/prometheus'
+  static_configs:
+    - targets: ['localhost:8000']
+- job_name: 'order-service'
+  scrape_interval: 15s
+  metrics_path: '/order-service/actuator/prometheus'
+  static_configs:
+    - targets: ['localhost:8000'] 
+```
+- prometheus dashboard 에 http_server_requests_seconds_count 를 검색하면 관련정보와 시각화 그래프 확인 가능
+
+- grafana -> prometheus 연동
+- 왼쪽 connections -> data sources -> add data source -> prometheus -> prometheus url 추가 
+- grafana dashboard 에서 Import dashboard 선택
+- https://grafana.com/grafana/dashboards/
+- micrometer JVM , Prometheus 2.0 Overview , Spring cloud Gateway -> dashboard id copied
+- import dashboard 에 카피한 아이디 붙히고 prometheus 지정 후 import
+
+- 그라파나에서 보이지 않는 부분은 http://127.0.0.1:8000/user-service/actuator/metrics을 참고하여
+- sum(spring_cloud_gateway_requests_seconds_count{job=~"$gatewayService"}) 이런 식으로 바꿔준다.
