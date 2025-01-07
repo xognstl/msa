@@ -120,3 +120,225 @@ RUN apt-get update && apt-get install -y curl
 $curl https://github.com/xognstl/spring-cloud-config
 ```
 - proxy 추가랑 curl 확인으로 git yml 파일 가져오는것 해결
+
+<br>
+
+### 4. Discovery Service
+___
+```dockerfile
+FROM openjdk:17-ea-11-jdk-slim
+VOLUME /tmp
+COPY target/discoveryservice-1.0.jar DiscoveryService.jar
+ENTRYPOINT ["java","-jar","DiscoveryService.jar"]
+```
+- ecommerce 사용 할 수 있게 등록
+```yaml
+  cloud:
+    config:
+      uri: http://127.0.0.1:8888
+      name: ecommerce
+```
+
+```text
+$mvn clean compile package -DskipTests=true
+$docker build --tag xognstl/discovery-service:1.0 .
+$docker push xognstl/discovery-service:1.0
+$docker run -d -p 8761:8761 --network ecommerce-network -e "spring.cloud.config.uri=http://config-service:8888" --name discovery-service xognstl/discovery-service:1.0
+```
+
+<br>
+
+### 5. Apigateway Service
+___
+```dockerfile
+FROM openjdk:17-ea-11-jdk-slim
+VOLUME /tmp
+COPY target/apigateway-service-1.0.jar ApiGateway.jar
+ENTRYPOINT ["java","-jar","ApiGateway.jar"]
+```
+```text
+$mvn clean compile package -DskipTests=true
+$docker build --tag xognstl/apigateway-service:1.0 .
+$docker push xognstl/apigateway-service:1.0
+$docker run -d -p 8000:8000 --network ecommerce-network 
+-e "spring.cloud.config.uri=http://config-service:8888"
+-e "spring.rabbitmq.host=rabbitmq"
+-e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/"
+ --name apigateway-service
+  xognstl/apigateway-service:1.0
+  
+$docker run -d -p 8000:8000 --network ecommerce-network -e "spring.cloud.config.uri=http://config-service:8888" -e "spring.rabbitmq.host=rabbitmq" -e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/" --name apigateway-service xognstl/apigateway-service:1.0
+```
+- Eureka Server 를 확인하면 잘 등록이 된 것을 확인 할 수 있다.
+
+<br>
+
+### 6. MariaDB
+___
+- 기존에 만들어 놨던 테이블 복사 예정
+- C:\mariadb-10.5.8-winx64\data\mydb 위치에 보면 우리가 만들어 놨던 테이블 파일이 있다.
+- C:\mariadb-10.5.8-winx64\data 폴더를 방금만든 F:\msa_project\docker-files\mysql_data 로 복사
+- F:\msa_project\docker-files\mysql_data 경로에 dockerfile, data 
+
+```dockerfile
+FROM mariadb:10.7
+ENV MYSQL_ROOT_PASSWORD 1234
+ENV MYSQL_DATABASE mydb
+COPY ./mysql_data/data /var/lib/mysql
+EXPOSE 3306
+CMD ["--user=root"]
+```
+
+```text
+.\bin\mariadb-install-db.exe --datadir=C:\mariadb-10.5.8-winx64\data --service-mariaDB --port=3306 --password=1234
+$docker build -t xognstl/my_mariadb:1.0 .
+$docker run -d -p 3306:3306 --network ecommerce-network --name mariadb xognstl/my_mariadb:1.0 --innodb-force-recovery=1
+
+## 접속 방법
+F:\msa_project\docker-files>docker exec -it mariadb /bin/bash
+root@ba4965d55fe2:/# mysql -h127.0.0.1 -uroot -p
+
+- 어디서든 접속 할 수 있게 허용 
+grant all privileges on *.* to 'root'@'%' identified by '1234'; 
+flush privileges;
+```
+- $docker pull mariadb:10.7 버전 호환성 문제로 10.7 로 다운그레이드 먼저하고 진행하였다.
+
+<br>
+
+### 7. Kafka
+___
+- zookeeper + kafka standalone 
+  - docker-compose 로 실행 : 도커 컨테이너를 하나의 스크립트 파일로서 실행할 수 있도록 해준다.  
+  다른 부가적인 설정관련 된 것들을 모아놓고 명령어로 실행한다.
+  - order service 에 kafka producer 사용할때 ip를 명시해주는데 네트워크에서 자동생성 ip는 안될 수 있으므로 ip지정
+  - git clone https://github.com/wurstmeister/kafka-docker
+
+- docker-compose-single-broker.yml 수정
+```yaml
+version: '2'
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+  kafka:
+    build: .
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: 192.168.99.100
+      KAFKA_CREATE_TOPICS: "test:1:1"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+```yaml
+version: '2'
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      my-network:
+        ipv4_address: 172.18.0.100
+  kafka:
+    # build: .
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: 172.18.0.101
+      KAFKA_CREATE_TOPICS: "test:1:1"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - zookeeper
+    networks:
+      my-network:
+        ipv4_address: 172.18.0.101
+networks:
+  my-network:
+    name: ecommerce-network
+    external: true
+
+```
+- $docker-compose -f docker-compose-single-broker.yml up -d
+
+<br>
+
+### 8. Zipkin
+___
+- https://zipkin.io/pages/quickstart.html Docker 실행 방법
+- $docker run -d -p 9411:9411 --network ecommerce-network --name zipkin openzipkin/zipkin
+
+<br>
+
+### 9. Monitoring
+___  
+- Prometheus
+  - https://hub.docker.com/r/prom/prometheus
+
+- yaml 파일 변경
+```yaml
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: 'user-service'
+    scrape_interval: 15s
+    metrics_path: '/user-service/actuator/prometheus'
+    static_configs:
+    - targets: ['localhost:8000']
+  - job_name: 'apigateway-service'
+    scrape_interval: 15s
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+    - targets: ['localhost:8000']
+  - job_name: 'order-service'
+    scrape_interval: 15s
+    metrics_path: '/order-service/actuator/prometheus'
+    static_configs:
+    - targets: ['localhost:8000'] 
+```
+```yaml
+    static_configs:
+      - targets: ["prometheus:9090"]
+  - job_name: 'user-service'
+    scrape_interval: 15s
+    metrics_path: '/user-service/actuator/prometheus'
+    static_configs:
+    - targets: ['apigateway-service:8000']
+  - job_name: 'apigateway-service'
+    scrape_interval: 15s
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+    - targets: ['apigateway-service:8000']
+  - job_name: 'order-service'
+    scrape_interval: 15s
+    metrics_path: '/order-service/actuator/prometheus'
+    static_configs:
+    - targets: ['apigateway-service:8000']  
+```
+```text
+docker run -d -p 9090:9090 \
+ --network ecommerce-network \
+ --name prometheus \
+ -v F:\msa_project\prometheus-3.1.0-rc.1.windows-amd64/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus 
+
+$docker run -d -p 9090:9090 --network ecommerce-network --name prometheus -v F:\msa_project\prometheus-3.1.0-rc.1.windows-amd64/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus
+```
+
+- Grafana
+  - https://grafana.com/grafana/download?pg=get&plcmt=selfmanaged-box1-cta1
+```text
+docker run -d -p 3000:3000 \
+ --network ecommerce-network \
+ --name grafana \
+ grafana/grafana
+
+$docker run -d -p 3000:3000 --network ecommerce-network --name grafana grafana/grafana 
+```
+
+<br>
