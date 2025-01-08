@@ -342,3 +342,125 @@ $docker run -d -p 3000:3000 --network ecommerce-network --name grafana grafana/g
 ```
 
 <br>
+
+### 10. Deployed Services
+___  
+ 
+```dockerfile
+FROM openjdk:17-ea-11-jdk-slim
+VOLUME /tmp
+COPY target/user-service-1.0.jar UserService.jar
+ENTRYPOINT ["java","-jar","UserService.jar"]
+```
+```text
+$mvn clean compile package -DskipTests=true
+$docker build --tag xognstl/user-service:1.0 .
+$docker push xognstl/user-service:1.0
+
+docker run -d --network ecommerce-network
+--name user-service
+-e "spring.cloud.config.uri=http://config-service:8888" 
+-e "spring.rabbitmq.host=rabbitmq" 
+-e "spring.zipkin.base-url=http://zipkin:9411"
+-e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/" 
+-e "logging.file=/api-logs/users-ws.log" # 로그파일 위치 지정 
+xognstl/user-service:1.0
+
+$docker run -d --network ecommerce-network --name user-service -e "spring.cloud.config.uri=http://config-service:8888" -e "spring.rabbitmq.host=rabbitmq" -e "spring.zipkin.base-url=http://zipkin:9411" -e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/" -e "logging.file=/api-logs/users-ws.log" xognstl/user-service:1.0
+```
+
+```yaml
+gateway:
+  ip: 172.18.0.5
+```
+- $ docker logs -f user-service
+
+<br>
+
+### 11. Order Microservice
+___  
+```dockerfile
+FROM openjdk:17-ea-11-jdk-slim
+VOLUME /tmp
+COPY target/order-service-1.0.jar OrderService.jar
+ENTRYPOINT ["java","-jar","OrderService.jar"]
+```
+- kafaka 서버 ip주소 변경
+```java
+@EnableKafka
+@Configuration
+public class KafkaProducerConfig {
+    @Bean
+    public ProducerFactory<String, String> producerFactory() {
+        Map<String, Object> properties = new HashMap<>();
+
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "172.18.0.101:9092");
+//        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092");
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+        return new DefaultKafkaProducerFactory<>(properties);
+    }
+}
+```
+```text
+$mvn clean compile package -DskipTests=true
+$docker build --tag xognstl/order-service:1.0 .
+$docker push xognstl/order-service:1.0
+
+docker run -d --network ecommerce-network
+--name order-service
+-e "spring.zipkin.base-url=http://zipkin:9411"
+-e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/"
+-e "spring.datasource.url=jdbc:mariadb://mariadb:3306/mydb" 
+-e "logging.file=/api-logs/order-ws.log" 
+xognstl/order-service:1.0
+
+$docker run -d --network ecommerce-network --name order-service -e "spring.zipkin.base-url=http://zipkin:9411" -e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/" -e "spring.datasource.url=jdbc:mariadb://mariadb:3306/mydb" -e "logging.file=/api-logs/order-ws.log" xognstl/order-service:1.0
+```
+
+<br>
+
+### 12. Catalog Microservice
+___  
+- KafkaConsumerConfig.java kafka ip 주소 변경
+```dockerfile
+FROM openjdk:17-ea-11-jdk-slim
+VOLUME /tmp
+COPY target/catalog-service-1.0.jar CatalogService.jar
+ENTRYPOINT ["java","-jar","CatalogService.jar"]
+```
+```text
+$mvn clean compile package -DskipTests=true
+$docker build --tag xognstl/catalog-service:1.0 .
+$docker push xognstl/catalog-service:1.0
+
+docker run -d --network ecommerce-network
+--name catalog-service
+-e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/"
+-e "logging.file=/api-logs/catalog-ws.log" 
+xognstl/catalog-service:1.0
+
+$docker run -d --network ecommerce-network --name catalog-service -e "eureka.client.serviceUrl.defaultZone=http://discovery-service:8761/eureka/" -e "logging.file=/api-logs/catalog-ws.log" xognstl/catalog-service:1.0
+```
+
+<br>
+
+### 13. Test
+___  
+- POST 127.0.0.1:8000/user-service/users
+```json
+{
+    "email": "xognstl@naver.com",
+    "name": "xognstl",
+    "pwd": "test1234"
+}
+```
+- POST 127.0.0.1:8000/order-service/사용자id/orders
+
+<br>
+
+### 14. Multi Profiles
+___
+- $mvn spring-boot:run -Dspring-boot.run.arguments=--spring.profiles.active=production
+- $java -Dspring.profiles.active=default XXX.jar
