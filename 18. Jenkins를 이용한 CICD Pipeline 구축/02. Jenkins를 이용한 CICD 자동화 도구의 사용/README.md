@@ -25,7 +25,7 @@ ___
 - General : My maven project build
 - Source Code Management 
   - None -> Git 
-  - Repository URL : https://github.com/joneconsulting/cicd-web-project
+  - Repository URL : https://github.com/*****/cicd-web-project
   - Branch Specifier (blank for 'any') : */main
 - Build
   - Root POM: pom.xml
@@ -43,7 +43,7 @@ ___
 - Item name -> My-Third-Project (Maven Project)
 - General : Deploy the Second project on Tomcat
 - Source Code Management
-  - Repository URL : https://github.com/joneconsulting/cicd-web-project
+  - Repository URL : https://github.com/*****/cicd-web-project
 - Build
   - Root POM: pom.xml
   - Golds: clean compile package
