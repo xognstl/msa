@@ -14,8 +14,8 @@ git version 2.39.5
 ```
 
 #### Maven
-- Manage Jenkins -> Jenkins Plugins -> available  maven
-- Manage Jenkins -> Global Tool Configuration  maven
+- Manage Jenkins -> Jenkins Plugins -> available -> maven
+- Manage Jenkins -> Global Tool Configuration -> maven
 
 <br>
 
@@ -38,9 +38,9 @@ ___
 
 ### 3. CI/CD 작업을 위한 Tomcat 서버 연동 / 배포
 ___
-- Manage Jenkins  Jenkins Plugins  available  deploy to container plugin
+- Manage Jenkins -> Jenkins Plugins -> available -> deploy to container plugin
 - 해당 플러그인이 jenkins에서 패키징 했던 war 파일을 tomcat 에 복사 할 수 있다.
-- Item name  My-Third-Project (Maven Project)
+- Item name -> My-Third-Project (Maven Project)
 - General : Deploy the Second project on Tomcat
 - Source Code Management
   - Repository URL : https://github.com/joneconsulting/cicd-web-project
