@@ -14,8 +14,8 @@ git version 2.39.5
 ```
 
 #### Maven
-- Manage Jenkins  Jenkins Plugins  available  maven
-- Manage Jenkins  Global Tool Configuration  maven
+- Manage Jenkins -> Jenkins Plugins -> available  maven
+- Manage Jenkins -> Global Tool Configuration  maven
 
 <br>
 
