@@ -72,3 +72,82 @@ ___
 <user username="deployer" password="deployer" roles="manager-script"/>
 <user username="tomcat" password="tomcat" roles="manager-gui"/>
 ```
+
+<br>
+
+### 4. PollSCM 설정을 통한 지속적인 파일 업데이트
+___
+#### SSH Server 설치 
+- $docker pull edowon0623/docker 
+- $docker run --privileged --name docker-server -itd -p 10022:22 -p 8082:8080 -e container=docker -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host edowon0623/docker:latest /usr/sbin/init
+- $ssh root@localhost -p 10022 /////P@ssw0rd
+- $systemctl enable docker
+- $systemctl start docker
+- mobaXterm 같은거로 접속 할 수 있다.
+
+#### PollSCM
+- Project -> Configure -> Build Triggers
+  - build periodically -> cron job (변경이 없어도 build 를 다시 한다.)
+  - Poll SCM -> cron job (commit 내용을 감지하여 변경이 있을때만 다시 build)
+  - 일정한 주기로 변경된 것을 감지하여 가져오는 작업
+
+- Poll SCM 에 Schedule * * * * * : 매초마다 확인 
+
+```text
+* 깃에서 프로젝트 받아와서 내꺼에 올리기
+git clone https://github.com/user/repository.git    // 소스 받아오기 
+git remote add origin https://github.com/username/my-new-repo.git // 내깃 연결
+git add .
+git commit -m "message"
+git push -u origin main
+```
+
+<br> 
+
+### 5. SSH + Docker가 설치되어 있는 VM(컨테이너) 사용하기
+___
+- Manage Jenkins -> Jenkins Plugins -> available -> publish over ssh
+- Manage Jenkins -> Configure System -> Publish over SSH
+  - Add SSH Servers(SSH 서버의 정보 입력)
+    - Name: docker-host
+    - Hostname: [Remote IP] ex)192.168.0.8 => ssh 서버 ip 
+    - Username: root
+    - Passphrase/Password: P@ssw0rd
+    - Port: 10022
+  - Test Configuration -> 테스트 확인 버튼
+
+<br> 
+
+### 6. Docker Container에 배포하기
+___
+1. war 파일을 ssh를 이용해서 복사 (서버2)
+2. (서버2) Dockerfile + war -> Docker Image 빌드
+3. Docker Image -> 컨테이너 생성
+
+
+- Item name : My-Docker-Project (Copy from: My-Third-Project)
+- Build Triggers : Poll SCM -> Disable
+- Post-build Actions
+  - Deploy war/ear to a container(빌드 후 조치) -> Delete
+  - 빌드 후 조치 추가 -> Send build artifacts over SSH
+    - SSH Server
+      - Name: docker-server(SSH에서 설정한 이름)
+      - Transfer Set
+        - Source files: target/*.war
+        - Remove prefix: target
+        - Remote directory: .  => ssh의 /root 에 war가 복사 된다.
+- Saver -> Build Now
+
+- root 에 war 파일 생긴걸 확인 할 수 있다.
+```text
+[root@7c1a55e661b3 ~]# cat Dockerfile
+FROM tomcat:9.0
+LABEL org.opencontainers.image.authors="xognstl@naver.com"
+COPY ./hello-world.war /usr/local/tomcat/webapps
+```
+- $docker build -t docker-server -f Dockerfile . : 위의 Dockerfile 로 이미지 생성
+- $docker run -p 8080:8080 --name mytomcat docker-server:latest
+
+- localhost:8082 로 호출 
+- docker server 의 컨테이너는 8082:8080 이고, SSH의 톰캣은 8080:8080
+- http://localhost:8082/hello-world/ 를 해보면 정상적으로 호출된것을 확인할 수 있다.
