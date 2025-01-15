@@ -151,3 +151,21 @@ COPY ./hello-world.war /usr/local/tomcat/webapps
 - localhost:8082 로 호출 
 - docker server 의 컨테이너는 8082:8080 이고, SSH의 톰캣은 8080:8080
 - http://localhost:8082/hello-world/ 를 해보면 정상적으로 호출된것을 확인할 수 있다.
+
+```text
+// 금방 만들었던 것 삭제 
+$docker stop mytomcat
+$docker rm mytomcat
+$docker rmi cicd-project:latest
+$rm -rf webapp.war
+```
+- Project -> Configure -> Post Build Actions
+- jenkins 에서 이미지, 컨테이너 자동으로 만드는 작업
+```text
+- Exec command
+$docker build --tag=cicd-project -f Dockerfile .;
+$docker run -d -p 8080:8080 --name mytomcat cicd-project:latest
+```
+- 빌드 하면 image 와 프로세스 확인 가능
+- docker 프로세스가 존재하고 있으면 에러가난다. 수작업으로 container, images 지워야한다.
+- 삭제하는 작업을 넣어주거나 별도의 제어프로그램을 사용해야한다.
