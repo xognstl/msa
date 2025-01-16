@@ -162,3 +162,167 @@ ___
 
 ```
 - tomcat 디렉토리 생성, 톰켓 다운로드
+
+  <br>
+
+  ### 5. Jenkins + Ansible 연동하기
+___
+- Manage Jenkins -> Configure System ->  Publish over SSH (Ansible 서버 추가)
+  - Add SSH Servers
+  - Name: ansible-host
+  - Hostname: [Remote IP] ex)192.168.0.8
+  - Username: root
+  - Passphrase/Password: P@ssw0rd
+  - Port: 22
+- Test Configuration
+
+
+- jenkins 서버 에서(bash 로 접속) ssh root@172.17.0.4 로 접속하면 접속이된다.  
+=> jenkins -> ansible 22번 포트 사용 확인
+
+<br>
+
+### 6. Jenkins + Ansible Playbook 사용하기
+___
+- item 생성 : My-Ansible-Project (My-Docker-Project Copy)
+
+
+- Post-build Actions
+  - Deploy war/ear to a container 삭제 
+  - Send build artifacts over SSH
+    - SSH Server 등록 
+      - Name : Publish over SSH 에 설정한 이름 , Transfer Set : target/*.war, target, .
+- Saver -> Build Now
+
+
+- 기존에는 git 에서 가져왔던 코드를 Jenkins 에서 build (War 파일) -> Docker 서버에 War 파일 복사 -> Docker 컨테이너 실행
+- Docker 에 작업했을 때는 컨테이너를 두번 이상 실행했을 때 오류가 발생했다.
+- 젠킨스에서 Docker 에 직접 배포하는 것이 아니라 ansible을 통해서 배포
+- Ansible 서버에 War 파일 복사 -> Ansible 서버의 target 들 Hosts 파일에 등록 -> 복사되어진 WAR 을 각각 제어   
+
+
+- Ansible Playbook 생성(first-devops-playbook.yml)
+  - Copy 된 War 파일로 docker image 생성 (dockerfile, playbook, war 파일이 경로에 있어야함.)
+  - 만들어진 Image 로 Container 생성
+```yaml
+- hosts: all
+  #   become: true
+
+  tasks:
+    - name: build a docker image with deployed war file
+      command: docker build -t cicd-project-ansible .
+      args:
+        chdir: /root
+
+    - name: create a container using cicd-project-ansible image
+      command: docker run -d --name my_cicd_project -p 8080:8080 cicd-project-ansible
+```
+- 호스트 파일 생성 
+  - Ansible 에서 관리하는 서버들 목록 작성 (ex. doc1, doc2)
+  - /root 디렉토리에 172.0.0.4 (ansible 서버) 작성하여 hosts라는 파일 작성
+- 실행
+  - $ansible-playbook -i hosts first-devops-playbook.yml --check
+
+
+- 기존에 만들었던 image, container 삭제
+- jenkins 로 playbook 실행 
+  - exec commend : ansible-playbook -i hosts first-devops-playbook.yml
+- http://localhost:8083/hello-world/ 정상 기동 확인 
+- 소스 commit 해서 poll SCM 이용하여 자동적으로 build, image, container 생성 확인
+- 기존에 container 는 하나의 ID만 가질수 있기 때문에 새로운 컨테이너를 만들게 되면 오류가 난다.
+- Build Now automatically : UNSTABLE 상태가 된다. image 생성은 ok, container fail
+
+
+- playbook에 container 중지, 삭제 , 이미지삭제하는 task 추가(second-devops-playbook.yml)
+- 작동중인 container 가 없으면 exception 발생 할 수 있으니 ignore_errors 추가
+```yaml
+- hosts: all
+  #   become: true
+
+  tasks:
+    - name: stop current running container
+      command: docker stop my_cicd_project
+      ignore_errors: yes
+
+    - name: remove stopped cotainer
+      command: docker rm my_cicd_project
+      ignore_errors: yes
+
+    - name: remove current docker image
+      command: docker rmi cicd-project-ansible
+      ignore_errors: yes
+
+    - name: build a docker image with deployed war file
+      command: docker build -t cicd-project-ansible .
+      args:
+        chdir: /root
+
+    - name: create a container using cicd-project-ansible image
+      command: docker run -d --name my_cicd_project -p 8080:8080 cicd-project-ansible
+```
+
+<br>
+
+### 7. Ansible을 이용한 Docker 이미지 관리
+___
+- $docker tag cicd-project-ansible xognstl/cicd-project-ansible : hub 아이디 붙은 이미지 생성
+- $docker login : docker hub 로그인
+- $docker push xognstl/cicd-project-ansible
+
+
+- docker hub 에 이미지 올리는것을 playbook을 이용하여 업로드
+- create-cicd-project-image-playbook.yml
+- $ansible-playbook -i hosts create-cicd-project-image-playbook.yml
+- build -> push -> image 삭제
+```yaml
+- hosts: all
+#   become: true
+
+  tasks:
+  - name: create a docker image with deployed waf file
+    command: docker build -t xognstl/cicd-project-ansible .
+    args: 
+        chdir: /root
+    
+  - name: push the image on Docker Hub
+    command: docker push xognstl/cicd-project-ansible
+
+  - name: remove the docker image from the ansible server
+    command: docker rmi xognstl/cicd-project-ansible  
+    ignore_errors: yes
+```
+- ansible 서버에서 docker-server 로 배포 작업 테스트
+- create-cicd-devops-container-playbook.yml
+```yaml
+- hosts: all
+#   become: true  
+
+  tasks:
+  - name: stop current running container
+    command: docker stop my_cicd_project
+    ignore_errors: yes
+
+  - name: remove stopped cotainer
+    command: docker rm my_cicd_project
+    ignore_errors: yes
+
+  - name: remove current docker image
+    command: docker rmi xognstl/cicd-project-ansible
+    ignore_errors: yes
+
+  - name: pull the newest docker image from Docker Hub
+    command: docker pull xognstl/cicd-project-ansible
+
+  - name: create a container using cicd-project-ansible image
+    command: docker run -d --name my_cicd_project -p 8080:8080 xognstl/cicd-project-ansible
+
+```
+
+- hub 에서 이미지가지고 와서 run
+- 기존 container , image 삭제 (ansible, docker 서버 둘다)
+- ansible hosts 에 docker-server ip 추가
+- $ansible-playbook -i hosts create-cicd-project-image-playbook.yml --limit 172.17.0.4 : push가 두번 되니 한곳에만 되게 limit
+  - ansible 서버에서만 이미지 생성 및 push
+- $ansible-playbook -i hosts create-cicd-devops-container-playbook.yml --limit 172.17.0.3
+  - docker 서버에서만 container 실행
+- http://localhost:8082/hello-world/ (docker server)
