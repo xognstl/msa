@@ -326,3 +326,12 @@ ___
 - $ansible-playbook -i hosts create-cicd-devops-container-playbook.yml --limit 172.17.0.3
   - docker 서버에서만 container 실행
 - http://localhost:8082/hello-world/ (docker server)
+
+<br>
+
+### 8. Ansible Playbook으로 Docker 컨테이너 생성하기
+___
+- My-AnsibleBook-Project Item 생성
+- Change Exec command
+  - ansible-playbook -i hosts create-cicd-project-image-playbook.yml --limit 172.17.0.4; (ansible server)
+  - ansible-playbook -i hosts create-cicd-devops-container-playbook.yml --limit 172.17.0.3(docker server)
