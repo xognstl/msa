@@ -165,7 +165,72 @@ localhost
 - Ansible Server) ssh-keygen, ssh-copy-id
   - $ssh-copy-id dell@172.10.72.88
   - $ ansible -i ./k8s/hosts kubernetes -m ping
+  - $ ansible -i ./k8s/hosts kubernetes -m win_ping
+  - window 에서 ping 안되는거 아래와 같은 방법으로 해결
+  - https://www.inflearn.com/community/questions/686434/ssh-copy-id-%EC%97%90%EB%9F%AC-%EB%AC%B8%EC%9D%98
+
 - K8s Master) create a deployment yaml file
+  - cicd-devops-deployment.yml
+    ```yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: cicd-deployment
+    spec:
+      selector:
+        matchLabels:
+          app: cicd-devops-project
+      replicas: 2
+  
+      template:
+        metadata:
+          labels:
+            app: cicd-devops-project
+        spec:
+          containers:
+          - name: cicd-devops-project
+            image: xognstl/cicd-project-ansible
+            imagePullPolicy: Always
+            ports:
+            - containerPort: 8080
+    ```
 - Ansible Server) create a playbook file for deployment
+  - k8s-cicd-deployment-playbook.yml, command => win_command 로 변경 
+    ```yaml
+    - name: Create pods using deployment
+      hosts: kubernetes
+    - name: create a deployment
+      win_command: kubectl apply -f E:\cicd\k8s\cicd-devops-deployment.yml
+    ```
 - Ansible Server) execute a playbook file (for deployment)
+  - $ansible-playbook -i ./k8s/hosts k8s-cicd-deployment-playbook.yml
 - Ansible Server) execute a playbook file (for service)
+  - k8s-cicd-service-playbook.yml 
+```yaml
+- name: create service for deployment
+  hosts: kubernetes
+  tasks:
+  - name: create a service
+    win_command: kubectl apply -f E:\cicd\k8s\cicd-devops-service.yml
+```
+  - $ansible-playbook -i ./k8s/hosts k8s-cicd-service-playbook.yml
+  - 실행시 32000 포트의 서비스가 생성됨을 확인 할 수 있다.
+  - http://localhost:32000/hello-world/ 접속 
+
+<br>
+
+### 5. Jenkins + Ansible + Kubernetes 연동하기
+___
+#### Jenkins + k8s
+- Jenkins 의 system -> publish over ssh 에 k8s 추가
+- My-K8s-Project Item 생성 
+  - build Triggers : SSH-Server : k8s-master
+  - exec command : $kubectl apply -f E:\cicd\k8s\cicd-devops-deployment.yml
+  
+#### Jenkins + Ansible + K8s
+- My-K8s-Project-using-Ansible Item 생성
+  - Build Triggers : SSH Server: ansible-server
+  - Exec command : 
+    - $ansible-playbook -i ./k8s/hosts k8s-cicd-deployment-playbook.yml;
+    - $ansible-playbook -i ./k8s/hosts k8s-cicd-service-playbook.yml; 
+    - 해당 playbook 파일에 ansible -> k8s 의 yml 파일 호출하는것이 포함되어 있다.
