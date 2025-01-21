@@ -234,3 +234,66 @@ ___
     - $ansible-playbook -i ./k8s/hosts k8s-cicd-deployment-playbook.yml;
     - $ansible-playbook -i ./k8s/hosts k8s-cicd-service-playbook.yml; 
     - 해당 playbook 파일에 ansible -> k8s 의 yml 파일 호출하는것이 포함되어 있다.
+   
+<br>
+
+### 6. 전체 CI/CD 자동화 프로세스 구성
+___
+- CI(Continuous Integration, 지속적인 통합)
+  - Git pull, 단위테스트, 패키징
+  - docker image 생성
+  - docker hub registry 에 이미지 push
+  - local 이미지 삭제
+- CD(Continuous Delivery, Deployment)
+  - 등록된 registry 를 받아서 k8s deployment 생성(2개 pod 생성)
+  - 서비스 생성
+
+- 최신 코드를 가져와 이미지를 만드는 작업
+  - create-cicd-project-image-playbook.yml(playbook 형태)
+    - docker build
+    - docker hub 에 push
+    - local image 삭제
+```yaml
+- hosts: all
+  tasks:
+    - name: create a docker image with deployed waf file
+      command: docker build -t xognstl/cicd-project-ansible .
+      args:
+        chdir: /root
+
+    - name: push the image on Docker Hub
+      command: docker push xognstl/cicd-project-ansible
+
+    - name: remove the docker image from the ansible server
+      command: docker rmi xognstl/cicd-project-ansible
+      ignore_errors: yes
+```
+  - Dockerfile
+```dockerfile
+FROM tomcat:9.0
+COPY ./hello-world.war /usr/local/tomcat/webapps
+```
+
+- Jenkins Item 생성 : My-K8s-Project-for-CI 
+  - Poll SCM : * * * * *
+  - Post-build Actions : SSH-Server : ansible-server
+  - Exec command : ansible-playbook -i ./k8s/hosts create-cicd-project-image-playbook.yml --limit ansible-server
+
+- Post-build actions(빌드 후 조치)
+  - build other projects -> My-K8s-project-using-Ansible(deployment, service 생성)
+
+- deployment 생성 하는 코드에 deployment 삭제 코드 추가
+```yaml
+- name: Create pods using deployment 
+  hosts: kubernetes 
+  # become: true
+  # user: ubuntu
+ 
+  tasks: 
+  - name: delete the previous deployment
+    win_command: kubectl delete E:\cicd\k8s\deployment.apps/cicd-deployment
+    ignore_errors: yes
+
+  - name: create a deployment
+    win_command: kubectl apply -f E:\cicd\k8s\cicd-devops-deployment.yml
+```
