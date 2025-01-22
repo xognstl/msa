@@ -152,3 +152,29 @@ pipeline {
     }
 }
 ```
+
+<br>
+
+### 5. Jenkins Pipeline - Tomcat 서버에 배포
+___
+- deploy 구문 추가
+```yaml
+stage('deploy') {
+    steps {
+deploy adapters: [tomcat9(credentialsId: 'deployer_user', path: '', url: 'http://172.10.72.88:8081')], contextPath: null, war: '**/*.war'
+      null, war: '**/*.war'
+    }
+}
+```
+
+<br>
+
+### 6. Jenkins Pipeline - Docker 컨테이너에 배포
+___
+```text
+stage('ssh publisher') {
+            steps {
+               sshPublisher(publishers: [sshPublisherDesc(configName: 'docker-server', transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: 'docker build -t xognstl/devops-exam1 -f Dockerfile .', execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '', remoteDirectorySDF: false, removePrefix: 'target', sourceFiles: 'target/*.war')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+            }
+        }
+```
