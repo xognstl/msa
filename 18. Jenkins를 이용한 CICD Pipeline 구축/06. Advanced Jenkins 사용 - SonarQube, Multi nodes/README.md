@@ -77,3 +77,49 @@ ___
   - 다양한 운영체제에서 실행 가능
   - Jenkins 프로젝트 생성 시 특정 Slave를 선택하여 실행 가능
 
+<br>
+
+### 5. Jenkins Node 추가하기
+___
+- 새로운 서버 추가
+  - $ docker run --privileged --name jenkins-node1 -itd -p 30022:22 -e container=docker -v /sys/fs/cgroup:/sys/fs/cgroup --cgroupns=host edowon0623/docker:latest /usr/sbin/init
+  - java 설치 : $ yum install -y java-11-openjdk-devel.aarch64
+  - master -> node ssh 접속을 위한 키등록 
+    - jenkins 서버 bash 로 접속
+    - $ssh-keygen -> $ ssh-copy-id root@172.17.0.6
+    - ssh root@172.17.0.6 으로 접속 해보면 비밀번호 필요없다.
+
+- jenkins master 에 slave node 추가
+- jenkins 관리 -> manage nodes -> new node
+  - Node Name: slave1
+  - Description: Add a server as a slave machine
+  - Number of executors: 5 -> 작업 요청 처리 최대 요청 갯수
+  - Remote root directory: /root/slave1 => 직접 생성 필요
+  - Labels: slave1
+  - Usage: Use this node as much as possible
+  - Launch method: Launch agents via SSH
+    - Host: [Slave server IP address] ex) 172.17.0.6
+    - Port: 22
+    - Credentials: root/P@ssw0rd , id  = slave1_root
+
+
+- My-First-Project 수정
+  - Restrict where this project can be run 선택
+  - Label Expression : slave1
+
+<br>
+
+### 6. Jenkins Slave Node에서 빌드하기
+___
+- Node 2번 서버 생성
+  - $docker run --privileged --name jenkins-node2 -itd -p 30023:22 -e container=docker -v /sys/fs/cgroup:/sys/fs/cgroup --cgroupns=host edowon0623/docker:latest /usr/sbin/init
+  - java 설치 17버전
+  - 키등록
+  - master 에 slave node 추가
+
+- script 에 agent node서버 추가해주면 해당 서버에서 할 수 있다.
+```text
+agent {
+        label 'slave1'
+    }
+```
